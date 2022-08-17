@@ -353,7 +353,7 @@ where
                     "Having source authority run confirmation again"
                 );
                 source_client
-                    .handle_certificate(target_cert.clone())
+                    .handle_certificate(target_cert.clone().into())
                     .await?
             } else {
                 // Unlike the previous case if a certificate created an object that
@@ -396,7 +396,7 @@ where
 
                 // Add it to the list of certificates to sync
                 trace!(?returned_digest, source =? source_authority, "Pushing transaction onto stack");
-                missing_certificates.push(returned_certificate);
+                missing_certificates.push(returned_certificate.into());
             }
         }
 
@@ -855,7 +855,7 @@ where
                     Vec<(AuthorityName, Option<SignedTransaction>)>,
                 ),
             >,
-            HashMap<TransactionDigest, CertifiedTransaction>,
+            HashMap<TransactionDigest, VerifiedCertificate>,
         ),
         SuiError,
     > {
@@ -863,7 +863,7 @@ where
         struct GetObjectByIDRequestState {
             good_weight: StakeUnit,
             bad_weight: StakeUnit,
-            responses: Vec<(AuthorityName, SuiResult<ObjectInfoResponse>)>,
+            responses: Vec<(AuthorityName, SuiResult<VerifiedObjectInfoResponse>)>,
         }
         let initial_state = GetObjectByIDRequestState::default();
         let threshold = self.committee.quorum_threshold();
@@ -1098,9 +1098,9 @@ where
             Vec<(
                 Object,
                 Option<MoveStructLayout>,
-                Option<CertifiedTransaction>,
+                Option<VerifiedCertificate>,
             )>,
-            Vec<(ObjectRef, Option<CertifiedTransaction>)>,
+            Vec<(ObjectRef, Option<VerifiedCertificate>)>,
         ),
         SuiError,
     > {
@@ -1175,7 +1175,7 @@ where
                 // NOTE: this is right now done sequentially, we should do them in parallel using
                 //       the usual FuturesUnordered.
                 let _result = self
-                    .sync_certificate_to_authority(cert.clone(), name, DEFAULT_RETRIES)
+                    .sync_certificate_to_authority(cert.clone().into(), name, DEFAULT_RETRIES)
                     .await;
 
                 // TODO: collect errors and propagate them to the right place
@@ -1201,9 +1201,9 @@ where
             Vec<(
                 Object,
                 Option<MoveStructLayout>,
-                Option<CertifiedTransaction>,
+                Option<VerifiedCertificate>,
             )>,
-            Vec<(ObjectRef, Option<CertifiedTransaction>)>,
+            Vec<(ObjectRef, Option<VerifiedCertificate>)>,
         ),
         SuiError,
     > {
@@ -1271,19 +1271,19 @@ where
                             // If we are given back a certificate, then we do not need
                             // to re-submit this transaction, we just returned the ready made
                             // certificate.
-                            Ok(TransactionInfoResponse {
+                            Ok(VerifiedTransactionInfoResponse {
                                 certified_transaction: Some(inner_certificate),
                                 ..
                             }) => {
                                 let tx_digest = inner_certificate.digest();
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
-                                state.certificate = Some(inner_certificate);
+                                state.certificate = Some(inner_certificate.into());
                             }
 
                             // If we get back a signed transaction, then we aggregate the
                             // new signature and check whether we have enough to form
                             // a certificate.
-                            Ok(TransactionInfoResponse {
+                            Ok(VerifiedTransactionInfoResponse {
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
                             }) => {
@@ -1501,7 +1501,7 @@ where
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         match result {
-                            Ok(TransactionInfoResponse {
+                            Ok(VerifiedTransactionInfoResponse {
                                 signed_effects: Some(inner_effects),
                                 ..
                             }) => {
@@ -1594,7 +1594,7 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &Transaction,
-    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+    ) -> Result<(VerifiedCertificate, CertifiedTransactionEffects), anyhow::Error> {
         let new_certificate = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
@@ -1604,6 +1604,10 @@ where
             .process_certificate(new_certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
+
+        // This isn't strictly necessary, but it makes many other things simpler if we return a
+        // VerifiedCertificate instead of a CertifiedTransaction
+        let new_certificate = new_certificate.verify(&self.committee)?;
 
         Ok((new_certificate, response))
     }
@@ -1627,7 +1631,10 @@ where
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
-                if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
+                if let Ok(effects) = self
+                    .process_certificate(cert_map[&tx_digest].clone().into())
+                    .await
+                {
                     if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
@@ -1790,7 +1797,7 @@ where
         &self,
         digest: &TransactionDigest,
         timeout_total: Option<Duration>,
-    ) -> SuiResult<TransactionInfoResponse> {
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         self.quorum_once_with_timeout(
             None,
             None,
@@ -1800,7 +1807,7 @@ where
                         .handle_transaction_info_request((*digest).into())
                         .await?;
 
-                    if let TransactionInfoResponse {
+                    if let VerifiedTransactionInfoResponse {
                         certified_transaction: Some(_),
                         signed_effects: Some(_),
                         ..
@@ -1827,7 +1834,7 @@ where
         // authorities known to have the effects we are requesting.
         authorities: Option<&BTreeSet<AuthorityName>>,
         timeout_total: Option<Duration>,
-    ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
+    ) -> SuiResult<(VerifiedCertificate, SignedTransactionEffects)> {
         self.quorum_once_with_timeout(
             None,
             authorities,

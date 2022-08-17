@@ -17,7 +17,7 @@ use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     committee::{Committee, StakeUnit},
     error::{SuiError, SuiResult},
-    messages::{CertifiedTransaction, SignedTransactionEffects, TransactionInfoResponse},
+    messages::{SignedTransactionEffects, TransactionInfoResponse, VerifiedCertificate},
     messages_checkpoint::CheckpointContents,
 };
 
@@ -567,7 +567,7 @@ where
         &self,
         authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         req: &DownloadRequest,
-    ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
+    ) -> SuiResult<(VerifiedCertificate, SignedTransactionEffects)> {
         let tx_digest = *req.transaction_digest();
         if let Some(c) = self.node_sync_store.get_cert_and_effects(&tx_digest)? {
             return Ok(c);

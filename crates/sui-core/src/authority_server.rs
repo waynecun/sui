@@ -276,7 +276,7 @@ impl ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(info))
+        Ok(tonic::Response::new(info.into()))
     }
 
     async fn handle_certificate(
@@ -284,13 +284,11 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut certificate = request.into_inner();
+        let certificate = request.into_inner();
         // 1) Verify certificate
-        certificate
+        let certificate = certificate
             .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        //TODO This is really really bad, we should have different types for signature verified transactions
-        certificate.is_verified = true;
 
         // 2) Check idempotency
         let digest = certificate.digest();
@@ -299,7 +297,7 @@ impl ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
-            return Ok(tonic::Response::new(response));
+            return Ok(tonic::Response::new(response.into()));
         }
 
         // 3) If it's a shared object transaction and requires consensus, we need to do so.
@@ -312,7 +310,7 @@ impl ValidatorService {
         {
             consensus_adapter
                 .submit(&ConsensusTransaction::UserTransaction(Box::new(
-                    certificate.clone(),
+                    certificate.clone().into(),
                 )))
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?;
@@ -332,7 +330,7 @@ impl ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(response.into()))
     }
 }
 
@@ -409,7 +407,7 @@ impl Validator for ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(response.into()))
     }
 
     type BatchInfoStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;

@@ -39,7 +39,7 @@ pub struct AuthorityStoreTables<S> {
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
     #[default_options_override_fn = "certificates_table_default_config"]
-    pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>,
+    pub(crate) certificates: DBMap<TransactionDigest, VerifiedCertificate>,
 
     /// The pending execution table holds a sequence of transactions that are present
     /// in the certificates table, but may not have yet been executed, and should be executed.

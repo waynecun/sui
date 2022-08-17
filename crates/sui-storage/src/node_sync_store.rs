@@ -4,7 +4,7 @@
 use sui_types::{
     base_types::TransactionDigest,
     error::SuiResult,
-    messages::{CertifiedTransaction, SignedTransactionEffects},
+    messages::{SignedTransactionEffects, VerifiedCertificate},
 };
 
 use typed_store::rocks::DBMap;
@@ -17,7 +17,7 @@ use typed_store_macros::DBMapUtils;
 #[derive(DBMapUtils)]
 pub struct NodeSyncStore {
     /// Certificates/Effects that have been fetched from remote validators, but not sequenced.
-    certs_and_fx: DBMap<TransactionDigest, (CertifiedTransaction, SignedTransactionEffects)>,
+    certs_and_fx: DBMap<TransactionDigest, (VerifiedCertificate, SignedTransactionEffects)>,
 }
 
 impl NodeSyncStore {
@@ -28,7 +28,7 @@ impl NodeSyncStore {
     pub fn store_cert_and_effects(
         &self,
         tx: &TransactionDigest,
-        val: &(CertifiedTransaction, SignedTransactionEffects),
+        val: &(VerifiedCertificate, SignedTransactionEffects),
     ) -> SuiResult {
         Ok(self.certs_and_fx.insert(tx, val)?)
     }
@@ -36,7 +36,7 @@ impl NodeSyncStore {
     pub fn get_cert_and_effects(
         &self,
         tx: &TransactionDigest,
-    ) -> SuiResult<Option<(CertifiedTransaction, SignedTransactionEffects)>> {
+    ) -> SuiResult<Option<(VerifiedCertificate, SignedTransactionEffects)>> {
         Ok(self.certs_and_fx.get(tx)?)
     }
 

@@ -99,7 +99,7 @@ pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 const MAX_TX_RECOVERY_RETRY: u32 = 3;
-type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
+type CertTxGuard<'a> = DBTxGuard<'a, VerifiedCertificate>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -353,7 +353,7 @@ impl AuthorityState {
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self.database.transaction_exists(&transaction_digest)? {
@@ -397,7 +397,7 @@ impl AuthorityState {
     pub async fn handle_transaction(
         &self,
         transaction: Transaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
         self.metrics.tx_orders.inc();
@@ -428,7 +428,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_node_sync_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        certificate: VerifiedCertificate,
         // Signed effects is signed by only one validator, it is not a
         // CertifiedTransactionEffects. The caller of this (node_sync) must promise to
         // wait until it has seen at least f+1 identifical effects digests matching this
@@ -477,8 +477,8 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+        certificate: VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
@@ -567,8 +567,8 @@ impl AuthorityState {
     async fn process_certificate(
         &self,
         tx_guard: CertTxGuard<'_>,
-        certificate: &CertifiedTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+        certificate: &VerifiedCertificate,
+    ) -> SuiResult<VerifiedTransactionInfoResponse> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -582,15 +582,6 @@ impl AuthorityState {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
-
-        // Check the certificate signatures.
-        let committee = &self.committee.load();
-        tracing::trace_span!("cert_check_signature")
-            .in_scope(|| certificate.verify(committee))
-            .map_err(|e| {
-                self.metrics.signature_errors.inc();
-                e
-            })?;
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
@@ -636,7 +627,7 @@ impl AuthorityState {
             .batch_size
             .observe(certificate.signed_data.data.kind.batch_size() as f64);
 
-        Ok(TransactionInfoResponse {
+        Ok(VerifiedTransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
             certified_transaction: Some(certificate.clone()),
             signed_effects: Some(signed_effects),
@@ -655,7 +646,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
         let (gas_status, input_objects) =
@@ -704,7 +695,7 @@ impl AuthorityState {
     pub async fn check_tx_already_executed(
         &self,
         digest: &TransactionDigest,
-    ) -> SuiResult<Option<TransactionInfoResponse>> {
+    ) -> SuiResult<Option<VerifiedTransactionInfoResponse>> {
         if self.database.effects_exists(digest)? {
             debug!("Transaction {digest:?} already executed");
             Ok(Some(self.make_transaction_info(digest).await?))
@@ -718,7 +709,7 @@ impl AuthorityState {
         indexes: &IndexStore,
         seq: TxSequenceNumber,
         digest: &TransactionDigest,
-        cert: &CertifiedTransaction,
+        cert: &VerifiedCertificate,
         effects: &SignedTransactionEffects,
         timestamp_ms: u64,
     ) -> SuiResult {
@@ -745,7 +736,7 @@ impl AuthorityState {
         // Load cert and effects.
         let info = self.make_transaction_info(digest).await?;
         let (cert, effects) = match info {
-            TransactionInfoResponse {
+            VerifiedTransactionInfoResponse {
                 certified_transaction: Some(cert),
                 signed_effects: Some(effects),
                 ..
@@ -835,7 +826,7 @@ impl AuthorityState {
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         self.make_transaction_info(&request.transaction_digest)
             .await
     }
@@ -914,7 +905,7 @@ impl AuthorityState {
         };
 
         Ok(ObjectInfoResponse {
-            parent_certificate,
+            parent_certificate: parent_certificate.map(|p| p.into()),
             requested_object_reference,
             object_and_lock,
         })
@@ -1367,7 +1358,7 @@ impl AuthorityState {
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(VerifiedCertificate, TransactionEffects), anyhow::Error> {
         QueryHelpers::get_transaction(&self.database, &digest)
     }
 
@@ -1476,7 +1467,7 @@ impl AuthorityState {
     async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<VerifiedTransactionInfoResponse, SuiError> {
         self.database
             .get_signed_transaction_info(transaction_digest)
     }
@@ -1510,7 +1501,7 @@ impl AuthorityState {
     pub(crate) async fn commit_certificate(
         &self,
         inner_temporary_store: InnerTemporaryStore,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
         if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
@@ -1543,7 +1534,7 @@ impl AuthorityState {
     /// Check whether a shared-object certificate has already been given shared-locks.
     pub async fn transaction_shared_locks_exist(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: &VerifiedCertificate,
     ) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
@@ -1567,7 +1558,7 @@ impl AuthorityState {
     pub async fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<CertifiedTransaction>, SuiError> {
+    ) -> Result<Option<VerifiedCertificate>, SuiError> {
         self.database.read_certificate(digest)
     }
 
