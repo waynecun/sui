@@ -66,7 +66,7 @@ function TokensPage() {
                 <IconLink
                     icon={SuiIcons.Union}
                     to="/stake"
-                    disabled={true}
+                    disabled={false}
                     text="Stake & Earn SUI"
                 />
             </div>

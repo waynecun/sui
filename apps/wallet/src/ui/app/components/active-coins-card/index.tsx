@@ -5,6 +5,7 @@ import { useMemo, useCallback } from 'react';
 import { useIntl } from 'react-intl';
 import { useNavigate, Link } from 'react-router-dom';
 
+import { coinFormat } from '_app/shared/coin-balance/coin-format';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
@@ -12,7 +13,6 @@ import {
     GAS_TYPE_ARG,
     SUPPORTED_COINS_LIST,
 } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
 
 import st from './ActiveCoinsCard.module.scss';
 
@@ -31,13 +31,17 @@ function ActiveCoinsCard({
 
     const coins = useMemo(() => {
         return SUPPORTED_COINS_LIST.map((coin) => {
-            const balance = intl.formatNumber(
+            const { displayBalance, symbol } = coinFormat(
+                intl,
                 BigInt(aggregateBalances[coin.coinType] || 0),
-                balanceFormatOptions
+                coin.coinType,
+                'accurate'
             );
             return {
                 ...coin,
-                balance,
+                balance: displayBalance,
+                coinSymbol: symbol,
+                symbolGeneric: coin.coinSymbol,
             };
         });
     }, [aggregateBalances, intl]);
@@ -62,7 +66,7 @@ function ActiveCoinsCard({
                 <div className={st.coinLabel}>
                     {activeCoin.coinName}{' '}
                     <span className={st.coinSymbol}>
-                        {activeCoin.coinSymbol}
+                        {activeCoin.symbolGeneric}
                     </span>
                 </div>
                 <div className={st.chevron}>
@@ -105,7 +109,7 @@ function ActiveCoinsCard({
                         <Icon icon={coin.coinIconName} />
                     </div>
                     <div className={st.coinLabel}>
-                        {coin.coinName} <span>{coin.coinSymbol}</span>
+                        {coin.coinName} <span>{coin.symbolGeneric}</span>
                     </div>
                     <div className={st.coinAmount}>
                         {coin.balance} <span>{coin.coinSymbol}</span>
