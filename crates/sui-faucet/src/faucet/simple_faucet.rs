@@ -18,7 +18,7 @@ use sui_json_rpc_types::{
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    messages::{Transaction, TransactionData},
+    messages::{ExecuteTransactionRequestType, Transaction, TransactionData},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -51,12 +51,14 @@ impl SimpleFaucet {
         info!("SimpleFaucet::new with active address: {active_address}");
 
         // Sync to have the latest status
-        SuiClientCommands::SyncClientState {
-            address: Some(active_address),
+        if wallet.client.is_gateway() {
+            SuiClientCommands::SyncClientState {
+                address: Some(active_address),
+            }
+            .execute(&mut wallet)
+            .await
+            .map_err(|err| FaucetError::Wallet(format!("Fail to sync client state: {}", err)))?;
         }
-        .execute(&mut wallet)
-        .await
-        .map_err(|err| FaucetError::Wallet(format!("Fail to sync client state: {}", err)))?;
 
         let coins = wallet
             .gas_objects(active_address)
@@ -266,14 +268,27 @@ impl SimpleFaucet {
         let response = context
             .client
             .quorum_driver()
-            .execute_transaction(tx)
+            .execute_transaction(
+                tx,
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
             .await?;
-        let effects = &response.effects;
+        let tx_cert = response
+            .tx_cert
+            .ok_or_else(|| anyhow!("Expect Some(tx_cert)"))?;
+        let effects = response
+            .effects
+            .ok_or_else(|| anyhow!("Expect Some(effects)"))?;
         if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));
         }
 
-        Ok(response)
+        Ok(SuiTransactionResponse {
+            certificate: tx_cert,
+            effects,
+            timestamp_ms: None,
+            parsed_data: None,
+        })
     }
 
     #[cfg(test)]
@@ -349,22 +364,27 @@ mod tests {
     use std::collections::HashSet;
 
     use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-    use test_utils::network::setup_network_and_wallet;
+    use test_utils::network::TestClusterBuilder;
 
     use super::*;
 
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
-        let (_network, context, _address) = setup_network_and_wallet().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+
         let prom_registry = prometheus::Registry::new();
-        let faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
+        let faucet = SimpleFaucet::new(test_cluster.wallet, &prom_registry)
+            .await
+            .unwrap();
         test_basic_interface(faucet).await;
     }
 
     #[tokio::test]
     async fn test_init_gas_queue() {
-        let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
         let results = SuiClientCommands::Gas {
             address: Some(address),
         }
@@ -389,7 +409,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_transfer_state() {
-        let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let mut context = test_cluster.wallet;
         let results = SuiClientCommands::Gas {
             address: Some(address),
         }

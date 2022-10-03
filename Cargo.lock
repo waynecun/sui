@@ -8667,6 +8667,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "futures",
+ "jsonrpsee",
  "jsonrpsee-http-client",
  "move-core-types",
  "move-package",
