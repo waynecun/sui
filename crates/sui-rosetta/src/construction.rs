@@ -10,8 +10,8 @@ use sui_types::base_types::{encode_bytes_hex, ObjectInfo, SuiAddress};
 use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
 use sui_types::messages::{
-    QuorumDriverRequest, QuorumDriverRequestType, QuorumDriverResponse, Transaction,
-    TransactionData,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    Transaction, TransactionData,
 };
 use sui_types::object::ObjectRead;
 use sui_types::sui_serde::Hex;
@@ -121,14 +121,14 @@ pub async fn submit(
 
     let response = context
         .quorum_driver
-        .execute_transaction(QuorumDriverRequest {
+        .execute_transaction(ExecuteTransactionRequest {
             transaction: signed_tx,
-            request_type: QuorumDriverRequestType::ImmediateReturn,
+            request_type: ExecuteTransactionRequestType::ImmediateReturn,
         })
         .await?;
 
     Ok(match response {
-        QuorumDriverResponse::ImmediateReturn => TransactionIdentifierResponse {
+        ExecuteTransactionResponse::ImmediateReturn => TransactionIdentifierResponse {
             transaction_identifier: TransactionIdentifier { hash },
             metadata: None,
         },

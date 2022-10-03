@@ -7921,7 +7921,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
- "workspace-hack",
+ "workspace-hack 0.1.0",
 ]
 
 [[package]]
