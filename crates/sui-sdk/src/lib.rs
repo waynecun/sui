@@ -30,10 +30,11 @@ use sui_json_rpc::api::WalletSyncApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, Page, SuiEventEnvelope, SuiEventFilter,
-    SuiObjectInfo, SuiTransactionQueryCriteria, SuiTransactionResponse, TxSeqNumber,
+    SuiObjectInfo, SuiTransactionResponse, TxSeqNumber,
 };
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::filter::TransactionQuery;
 use sui_types::messages::Transaction;
 use types::base_types::SequenceNumber;
 use types::messages::ExecuteTransactionRequestType;
@@ -306,7 +307,7 @@ pub struct FullNodeApi(Arc<SuiClientApi>);
 impl FullNodeApi {
     pub async fn get_transactions(
         &self,
-        query: SuiTransactionQueryCriteria,
+        query: TransactionQuery,
         cursor: Option<TxSeqNumber>,
         limit: Option<usize>,
     ) -> anyhow::Result<Page<(TxSeqNumber, TransactionDigest), TxSeqNumber>> {
