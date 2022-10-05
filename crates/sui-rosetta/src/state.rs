@@ -31,6 +31,10 @@ use crate::types::{
 use crate::ErrorType::{BlockNotFound, InternalError};
 use crate::{Error, SUI};
 
+#[cfg(test)]
+#[path = "unit_tests/balance_changing_tx_tests.rs"]
+mod balance_changing_tx_tests;
+
 pub struct OnlineServerContext {
     pub state: Arc<AuthorityState>,
     pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
@@ -179,7 +183,7 @@ impl PseudoBlockProvider {
 
         let f = blocks.clone();
         tokio::spawn(async move {
-            if let Err(e) = f.update_balance(0, genesis_txs).await{
+            if let Err(e) = f.update_balance(0, genesis_txs).await {
                 error!("Error updating balance, cause: {e:?}")
             }
             loop {
@@ -308,7 +312,7 @@ fn extract_balance_changes_from_ops(
     let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
     for op in ops {
         match op.type_ {
-            OperationType::TransferSUI | OperationType::GasSpent | OperationType::Genesis => {
+            OperationType::SuiBalanceChange | OperationType::GasSpent | OperationType::Genesis => {
                 let addr = op
                     .account
                     .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?
