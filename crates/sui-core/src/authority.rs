@@ -56,7 +56,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::filter::TransactionQuery;
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
 use sui_types::object::{Owner, PastObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
@@ -74,7 +74,7 @@ use sui_types::{
 };
 
 use crate::checkpoints::ConsensusSender;
-use crate::epoch::epoch_store::EpochStore;
+use crate::epoch::committee_store::CommitteeStore;
 use crate::metrics::TaskUtilizationExt;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
@@ -104,19 +104,6 @@ pub mod move_integration_tests;
 mod gas_tests;
 
 pub mod authority_store_tables;
-
-mod authority_store;
-use crate::epoch::committee_store::CommitteeStore;
-use crate::metrics::TaskUtilizationExt;
-pub use authority_store::{
-    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
-};
-use sui_types::committee::EpochId;
-use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
-};
-use sui_types::object::{Owner, PastObjectRead};
-use sui_types::sui_system_state::SuiSystemState;
 
 pub mod authority_notifier;
 mod authority_store;
