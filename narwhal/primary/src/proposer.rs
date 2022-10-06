@@ -30,8 +30,8 @@ pub struct Proposer {
     committee: Committee,
     /// Service to sign headers.
     signature_service: SignatureService<Signature>,
-    /// The size of the headers' payload.
-    header_size: usize,
+    /// The maximum number of batches in header.
+    max_header_num_of_batches: usize,
     /// The maximum delay to wait for batches' digests.
     max_header_delay: Duration,
     /// The network model in which the node operates.
@@ -67,7 +67,7 @@ impl Proposer {
         name: PublicKey,
         committee: Committee,
         signature_service: SignatureService<Signature>,
-        header_size: usize,
+        max_header_num_of_batches: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -82,7 +82,7 @@ impl Proposer {
                 name,
                 committee,
                 signature_service,
-                header_size,
+                max_header_num_of_batches,
                 max_header_delay,
                 network_model,
                 rx_reconfigure,
@@ -92,7 +92,7 @@ impl Proposer {
                 round: 0,
                 last_parents: genesis,
                 last_leader: None,
-                digests: Vec::with_capacity(2 * header_size),
+                digests: Vec::with_capacity(2 * max_header_num_of_batches),
                 payload_size: 0,
                 metrics,
             }
@@ -233,7 +233,7 @@ impl Proposer {
             // the leader or the leader has enough votes to enable a commit). The latter condition only matters
             // in partially synchrony.
             let enough_parents = !self.last_parents.is_empty();
-            let enough_digests = self.payload_size >= self.header_size;
+            let enough_digests = self.payload_size >= self.max_header_num_of_batches;
             let mut timer_expired = timer.is_elapsed();
 
             if (timer_expired || (enough_digests && advance)) && enough_parents {

@@ -18,7 +18,7 @@ use types::{ReconfigureNotification, WorkerPrimaryMessage};
 #[tokio::test]
 async fn test_simple_epoch_change() {
     let parameters = Parameters {
-        header_size: 32, // One batch digest
+        max_header_num_of_batches: 1, // One batch digest
         ..Parameters::default()
     };
     ensure_test_environment();
@@ -148,7 +148,7 @@ async fn test_partial_committee_change() {
     telemetry_subscribers::init_for_testing();
     ensure_test_environment();
     let parameters = Parameters {
-        header_size: 32, // One batch digest
+        max_header_num_of_batches: 1, // One batch digest
         ..Parameters::default()
     };
 
@@ -316,7 +316,7 @@ async fn test_restart_with_new_committee_change() {
     ensure_test_environment();
 
     let parameters = Parameters {
-        header_size: 32, // One batch digest
+        max_header_num_of_batches: 1, // One batch digest
         ..Parameters::default()
     };
 
@@ -503,7 +503,7 @@ async fn test_restart_with_new_committee_change() {
 async fn test_simple_committee_update() {
     ensure_test_environment();
     let parameters = Parameters {
-        header_size: 32, // One batch digest
+        max_header_num_of_batches: 1, // One batch digest
         ..Parameters::default()
     };
 

@@ -105,11 +105,11 @@ pub type WorkerId = u32;
 /// milliseconds or seconds (e.x 5s, 10ms , 2000ms).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// The preferred header size. The primary creates a new header when it has enough parents and
-    /// enough batches' digests to reach `header_size`. Denominated in bytes.
-    pub header_size: usize,
+    /// The maximum number of batch digests included in a header. The primary creates a new header
+    /// when it has enough parents and enough batches' digests to reach `max_header_num_of_batches`.
+    pub max_header_num_of_batches: usize,
     /// The maximum delay that the primary waits between generating two headers, even if the header
-    /// did not reach `max_header_size`.
+    /// did not reach `max_header_num_of_batches`.
     #[serde(with = "duration_format")]
     pub max_header_delay: Duration,
     /// The depth of the garbage collection (Denominated in number of rounds).
@@ -259,7 +259,7 @@ impl Default for BlockSynchronizerParameters {
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            header_size: 1_000,
+            max_header_num_of_batches: 32,
             max_header_delay: Duration::from_millis(100),
             gc_depth: 50,
             sync_retry_delay: Duration::from_millis(5_000),
@@ -276,7 +276,7 @@ impl Default for Parameters {
 
 impl Parameters {
     pub fn tracing(&self) {
-        info!("Header size set to {} B", self.header_size);
+        info!("Header max number of batches set to {}", self.max_header_num_of_batches);
         info!(
             "Max header delay set to {} ms",
             self.max_header_delay.as_millis()
@@ -710,7 +710,7 @@ mod tests {
         parameters.tracing();
 
         // THEN
-        assert!(logs_contain("Header size set to 1000 B"));
+        assert!(logs_contain("Header max number of batches set to 32"));
         assert!(logs_contain("Max header delay set to 100 ms"));
         assert!(logs_contain("Garbage collection depth set to 50 rounds"));
         assert!(logs_contain("Sync retry delay set to 5000 ms"));

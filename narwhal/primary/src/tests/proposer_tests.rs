@@ -28,7 +28,7 @@ async fn propose_empty() {
         name,
         committee.clone(),
         signature_service,
-        /* header_size */ 1_000,
+        /* max_header_num_of_batches */ 32,
         /* max_header_delay */ Duration::from_millis(20),
         NetworkModel::PartiallySynchronous,
         rx_reconfigure,
@@ -67,7 +67,7 @@ async fn propose_payload() {
         name.clone(),
         committee.clone(),
         signature_service,
-        /* header_size */ 32,
+        /* max_header_num_of_batches */ 1,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         NetworkModel::PartiallySynchronous,
